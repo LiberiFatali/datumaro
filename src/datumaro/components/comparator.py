@@ -393,8 +393,57 @@ class TableComparator:
         return dataset_format, dataset_labels, image_stats, ann_stats
 
     @staticmethod
+    def _format_table(headers: List[str], rows: List[List[str]]) -> str:
+        """
+        Primitive replacement for tabulate(tablefmt="grid").
+        """
+        if not headers and not rows:
+            return ""
+
+        num_cols = len(headers) if headers else (len(rows[0]) if rows else 0)
+        if num_cols == 0:
+            return ""
+
+        col_widths = [len(h) for h in headers] if headers else [0] * num_cols
+
+        for row in rows:
+            for i, item in enumerate(row):
+                lines = str(item).split("\n")
+                max_line_len = max(len(line) for line in lines) if lines else 0
+                col_widths[i] = max(col_widths[i], max_line_len)
+
+        def get_sep(char="-"):
+            return "+" + "+".join(char * (w + 2) for w in col_widths) + "+"
+
+        def format_row(row_data):
+            cells = [str(item).split("\n") for item in row_data]
+            max_lines = max(len(c) for c in cells)
+
+            formatted_lines = []
+            for i in range(max_lines):
+                line_parts = []
+                for j, cell_lines in enumerate(cells):
+                    content = cell_lines[i] if i < len(cell_lines) else ""
+                    line_parts.append(f" {content:<{col_widths[j]}} ")
+                formatted_lines.append("|" + "|".join(line_parts) + "|")
+            return "\n".join(formatted_lines)
+
+        table_lines = []
+        sep = get_sep()
+        table_lines.append(sep)
+        if headers:
+            table_lines.append(format_row(headers))
+            table_lines.append(get_sep("="))
+
+        for row in rows:
+            table_lines.append(format_row(row))
+            table_lines.append(sep)
+
+        return "\n".join(table_lines)
+
+    @staticmethod
     def _create_table(headers: List[str], rows: List[List[str]]) -> str:
-        """Creates a table with the given headers and rows using the tabulate module.
+        """Creates a table with the given headers and rows.
 
         Args:
             headers: A list containing table headers.
@@ -407,16 +456,14 @@ class TableComparator:
         def wrapfunc(item):
             """Wrap a item consisted of text, returning a list of wrapped lines."""
             max_len = 35
-            return "\n".join(wrap(item, max_len))
+            return "\n".join(wrap(str(item), max_len))
 
         wrapped_rows = []
         for row in rows:
             new_row = [wrapfunc(item) for item in row]
             wrapped_rows.append(new_row)
 
-        from tabulate import tabulate
-
-        return tabulate(wrapped_rows, headers, tablefmt="grid")
+        return TableComparator._format_table(headers, wrapped_rows)
 
     @staticmethod
     def _create_dict(rows: List[List[str]]) -> Dict[str, List[str]]:
